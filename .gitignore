@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# settings backups created by install.sh
+settings.json.bak.*

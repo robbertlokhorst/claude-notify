@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/notify.sh idle" }
+        ]
+      },
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/notify.sh permission" }
+        ]
+      }
+    ]
+  }
+}
