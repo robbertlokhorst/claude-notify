@@ -13,9 +13,34 @@ kind="${1:-idle}"
 session_id=$(printf '%s' "$input" | jq -r '.session_id // ""')
 message=$(printf '%s' "$input" | jq -r '.message // "Needs your attention"')
 cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
+transcript=$(printf '%s' "$input" | jq -r '.transcript_path // ""')
 project=$(basename "${cwd:-unknown}")
 
 NOTIFIER=/opt/homebrew/bin/terminal-notifier
+
+# The session UUID is useless to a human. The best human-readable identifier is
+# the last prompt you actually typed. In the transcript, a typed prompt is a
+# user entry whose .message.content is a STRING (tool results are arrays).
+last_prompt=""
+if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+  last_prompt=$(jq -rs '
+    map(select(.type=="user"
+               and (.message.content | type) == "string"
+               and (.message.content | startswith("<") | not)))
+    | last | .message.content // ""' "$transcript" 2>/dev/null | tr '\n' ' ')
+fi
+# Trim to a notification-friendly length.
+if [ -n "$last_prompt" ]; then
+  [ "${#last_prompt}" -gt 90 ] && last_prompt="${last_prompt:0:90}…"
+else
+  last_prompt="Session ${session_id:0:8}"
+fi
+
+# Current git branch, if this is a repo — extra context for which checkout.
+branch=""
+if [ -n "$cwd" ] && command -v git >/dev/null 2>&1; then
+  branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+fi
 
 # Distinct sound per kind: a calm chime for "done", an attention-grabbing
 # tone for "needs your approval".
@@ -39,10 +64,15 @@ case "${TERM_PROGRAM:-}" in
   *)            bundle="" ;;
 esac
 
+# Title shows project (+ branch); subtitle is the prompt you typed; body is the
+# event + a click hint. That makes "which session?" answerable at a glance.
+title="$project"
+[ -n "$branch" ] && title="$project ⎇ $branch"
+
 args=(
-  -title   "Claude Code · $project"
-  -subtitle "$message"
-  -message "Session ${session_id:0:8} · click to focus"
+  -title   "$title"
+  -subtitle "$last_prompt"
+  -message "$message · click to focus"
   -sound   "$sound"
   -group   "claude-$session_id"   # collapses repeat notifs per session
 )
