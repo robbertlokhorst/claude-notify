@@ -57,6 +57,31 @@ echo '{"session_id":"test123","message":"Hello","cwd":"'"$PWD"'"}' | \
   TERM_PROGRAM="$TERM_PROGRAM" ~/.claude/hooks/notify.sh idle
 ```
 
+## Muting sessions
+
+Some sessions you don't want pinged about (a long-running watcher, a session
+you're actively babysitting). Manage that with the `claude-notify` CLI —
+sessions are shown by project + last typed prompt, so you never handle raw
+UUIDs:
+
+```bash
+claude-notify list           # recent sessions, numbered, with 🔔/🔕 state
+claude-notify mute 3         # silence session #3 from the list
+claude-notify mute <id>      # ...or by raw session id
+claude-notify unmute 3       # re-enable
+claude-notify unmute all     # clear every mute
+claude-notify muted          # show only muted sessions
+```
+
+Muting takes effect immediately — the hook checks the mute list
+(`~/.claude/claude-notify-muted`, one session id per line) on every event and
+exits silently for muted sessions. `mute`/`unmute` echo the project + prompt
+they matched so you can confirm you hit the right one.
+
+> Note: list numbers reflect most-recent activity, so an active session can
+> shift position between commands. The confirmation line (project + prompt) is
+> the source of truth for what you actually muted.
+
 ## Customizing
 
 - **Sounds** — edit the `case "$kind"` block in `hooks/notify.sh`. Any name from

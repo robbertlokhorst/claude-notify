@@ -16,6 +16,15 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
 transcript=$(printf '%s' "$input" | jq -r '.transcript_path // ""')
 project=$(basename "${cwd:-unknown}")
 
+# Muted sessions: one session_id per line. Managed by the `claude-notify` CLI.
+# If this session is muted, exit silently (still returning valid JSON).
+MUTE_FILE="${HOME}/.claude/claude-notify-muted"
+if [ -n "$session_id" ] && [ -f "$MUTE_FILE" ] \
+   && grep -qxF "$session_id" "$MUTE_FILE" 2>/dev/null; then
+  printf '{}'
+  exit 0
+fi
+
 NOTIFIER=/opt/homebrew/bin/terminal-notifier
 
 # The session UUID is useless to a human. The best human-readable identifier is

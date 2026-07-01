@@ -27,6 +27,12 @@ cp "${REPO_DIR}/hooks/notify.sh" "${HOOKS_DIR}/notify.sh"
 chmod +x "${HOOKS_DIR}/notify.sh"
 echo "==> Installed ${HOOKS_DIR}/notify.sh"
 
+# 2b. Link the management CLI onto PATH -------------------------------------
+chmod +x "${REPO_DIR}/bin/claude-notify"
+BIN_DEST="$(brew --prefix)/bin/claude-notify"
+ln -sf "${REPO_DIR}/bin/claude-notify" "$BIN_DEST"
+echo "==> Linked 'claude-notify' CLI -> ${BIN_DEST}"
+
 # 3. Merge the hooks block into settings.json -------------------------------
 mkdir -p "$CLAUDE_DIR"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"

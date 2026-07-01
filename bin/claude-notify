@@ -1,0 +1,116 @@
+#!/bin/bash
+# claude-notify — manage which Claude Code sessions send desktop notifications.
+#
+#   claude-notify list            show recent sessions, numbered, with mute state
+#   claude-notify mute   <n|id>   silence notifications for that session
+#   claude-notify unmute <n|id>   re-enable notifications
+#   claude-notify unmute all      clear the whole mute list
+#   claude-notify muted           show only currently-muted sessions
+#
+# Sessions are shown by project + last typed prompt so you never handle raw
+# UUIDs. The mute list is a plain file: ~/.claude/claude-notify-muted
+set -euo pipefail
+
+PROJECTS_DIR="${HOME}/.claude/projects"
+MUTE_FILE="${HOME}/.claude/claude-notify-muted"
+LIMIT="${CLAUDE_NOTIFY_LIST_LIMIT:-20}"   # how many recent sessions to list
+
+touch "$MUTE_FILE"
+
+is_muted() { grep -qxF "$1" "$MUTE_FILE" 2>/dev/null; }
+
+# Extract the last typed prompt from a transcript (string content, not a tool
+# result array, not an internal <command> message).
+last_prompt() {
+  jq -rs '
+    map(select(.type=="user"
+               and (.message.content | type) == "string"
+               and (.message.content | startswith("<") | not)))
+    | last | .message.content // ""' "$1" 2>/dev/null | tr '\n' ' ' | cut -c1-70
+}
+
+# Print the N most-recently-active transcripts, one per line:
+#   <session_id>\t<project>\t<last_prompt>
+recent_sessions() {
+  [ -d "$PROJECTS_DIR" ] || return 0
+  # Newest first by mtime. `ls -t` handles the ordering; parse each path.
+  ls -t "$PROJECTS_DIR"/*/*.jsonl 2>/dev/null | head -n "$LIMIT" | while read -r f; do
+    sid=$(basename "$f" .jsonl)
+    proj=$(basename "$(dirname "$f")" | sed 's/^-Users-[^-]*-[^-]*-//; s/-/\//g')
+    printf '%s\t%s\t%s\n' "$sid" "$proj" "$(last_prompt "$f")"
+  done
+}
+
+# Resolve an argument that is either a list-number or a raw session id.
+# Sets globals: RESOLVED_ID, RESOLVED_LABEL (project + prompt, for confirmation).
+resolve_id() {
+  local arg="$1" line
+  RESOLVED_ID=""; RESOLVED_LABEL=""
+  if [[ "$arg" =~ ^[0-9]+$ ]]; then
+    line=$(recent_sessions | sed -n "${arg}p")
+    RESOLVED_ID=$(printf '%s' "$line" | cut -f1)
+    RESOLVED_LABEL=$(printf '%s' "$line" | cut -f2- | tr '\t' ' ')
+  else
+    RESOLVED_ID="$arg"
+    # Look up a label for a raw id, if we can find its transcript.
+    local f; f=$(ls "$PROJECTS_DIR"/*/"$arg".jsonl 2>/dev/null | head -1)
+    [ -n "$f" ] && RESOLVED_LABEL="$(basename "$(dirname "$f")" | sed 's/^-Users-[^-]*-[^-]*-//; s/-/\//g')  $(last_prompt "$f")"
+  fi
+}
+
+cmd_list() {
+  local muted_only="${1:-}" i=0 shown=0
+  # Read into the parent shell (process substitution, not a pipe) so counters
+  # survive the loop.
+  while IFS=$'\t' read -r sid proj prompt; do
+    i=$((i+1))
+    if is_muted "$sid"; then state="🔕 muted"; else state="🔔 on   "; fi
+    [ "$muted_only" = "muted" ] && ! is_muted "$sid" && continue
+    shown=$((shown+1))
+    printf '%2d  %s  %-22s  %s\n' "$i" "$state" "${proj:0:22}" "${prompt:-(no prompt yet)}"
+  done < <(recent_sessions)
+  if [ "$shown" -eq 0 ]; then
+    if [ "$muted_only" = "muted" ]; then echo "No muted sessions."
+    else echo "No recent sessions found."; fi
+  fi
+  return 0
+}
+
+cmd_mute() {
+  [ -z "${1:-}" ] && { echo "Usage: claude-notify mute <number|session-id>"; exit 1; }
+  resolve_id "$1"
+  [ -z "$RESOLVED_ID" ] && { echo "No session matches '$1'. Run: claude-notify list"; exit 1; }
+  if is_muted "$RESOLVED_ID"; then
+    echo "Already muted: ${RESOLVED_LABEL:-$RESOLVED_ID}"
+  else
+    printf '%s\n' "$RESOLVED_ID" >> "$MUTE_FILE"
+    echo "🔕 Muted: ${RESOLVED_LABEL:-$RESOLVED_ID}"
+  fi
+}
+
+cmd_unmute() {
+  local arg="${1:-}"
+  if [ "$arg" = "all" ]; then
+    : > "$MUTE_FILE"; echo "🔔 Cleared all mutes."; return
+  fi
+  [ -z "$arg" ] && { echo "Usage: claude-notify unmute <number|session-id|all>"; exit 1; }
+  resolve_id "$arg"
+  [ -z "$RESOLVED_ID" ] && { echo "No session matches '$arg'. Run: claude-notify list"; exit 1; }
+  if is_muted "$RESOLVED_ID"; then
+    grep -vxF "$RESOLVED_ID" "$MUTE_FILE" > "${MUTE_FILE}.tmp" || true
+    mv "${MUTE_FILE}.tmp" "$MUTE_FILE"
+    echo "🔔 Unmuted: ${RESOLVED_LABEL:-$RESOLVED_ID}"
+  else
+    echo "Not muted: ${RESOLVED_LABEL:-$RESOLVED_ID}"
+  fi
+}
+
+case "${1:-list}" in
+  list)   cmd_list ;;
+  muted)  cmd_list muted ;;
+  mute)   shift; cmd_mute "${1:-}" ;;
+  unmute) shift; cmd_unmute "${1:-}" ;;
+  -h|--help|help)
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) echo "Unknown command: $1"; echo "Try: claude-notify --help"; exit 1 ;;
+esac
