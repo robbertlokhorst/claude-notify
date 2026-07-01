@@ -3,8 +3,11 @@
 #
 #   claude-notify list            show recent sessions, numbered, with mute state
 #   claude-notify mute   <n|id>   silence notifications for that session
+#   claude-notify mute   this     silence THIS session (run from inside it)
 #   claude-notify unmute <n|id>   re-enable notifications
+#   claude-notify unmute this     re-enable THIS session
 #   claude-notify unmute all      clear the whole mute list
+#   claude-notify toggle [this]   flip mute state (defaults to this session)
 #   claude-notify muted           show only currently-muted sessions
 #
 # Sessions are shown by project + last typed prompt so you never handle raw
@@ -46,6 +49,14 @@ recent_sessions() {
 resolve_id() {
   local arg="$1" line
   RESOLVED_ID=""; RESOLVED_LABEL=""
+  # "this" = the session the command is running inside (env var set by Claude Code).
+  if [ "$arg" = "this" ]; then
+    if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+      echo "'this' only works when run inside a Claude Code session." >&2
+      return 0
+    fi
+    arg="$CLAUDE_CODE_SESSION_ID"
+  fi
   if [[ "$arg" =~ ^[0-9]+$ ]]; then
     line=$(recent_sessions | sed -n "${arg}p")
     RESOLVED_ID=$(printf '%s' "$line" | cut -f1)
@@ -105,12 +116,20 @@ cmd_unmute() {
   fi
 }
 
+cmd_toggle() {
+  # Defaults to "this" session when no target is given.
+  resolve_id "${1:-this}"
+  [ -z "$RESOLVED_ID" ] && { echo "No session matches '${1:-this}'. Run: claude-notify list"; exit 1; }
+  if is_muted "$RESOLVED_ID"; then cmd_unmute "$RESOLVED_ID"; else cmd_mute "$RESOLVED_ID"; fi
+}
+
 case "${1:-list}" in
   list)   cmd_list ;;
   muted)  cmd_list muted ;;
   mute)   shift; cmd_mute "${1:-}" ;;
   unmute) shift; cmd_unmute "${1:-}" ;;
+  toggle) shift; cmd_toggle "${1:-this}" ;;
   -h|--help|help)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "Unknown command: $1"; echo "Try: claude-notify --help"; exit 1 ;;
 esac
