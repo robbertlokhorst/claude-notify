@@ -63,9 +63,16 @@ resolve_id() {
     RESOLVED_LABEL=$(printf '%s' "$line" | cut -f2- | tr '\t' ' ')
   else
     RESOLVED_ID="$arg"
-    # Look up a label for a raw id, if we can find its transcript.
-    local f; f=$(ls "$PROJECTS_DIR"/*/"$arg".jsonl 2>/dev/null | head -1)
-    [ -n "$f" ] && RESOLVED_LABEL="$(basename "$(dirname "$f")" | sed 's/^-Users-[^-]*-[^-]*-//; s/-/\//g')  $(last_prompt "$f")"
+    # Look up a label for a raw id, if we can find its transcript. A brand-new
+    # session may not have a transcript yet, so this must never abort the
+    # script (guard against the no-match glob under `set -e`/pipefail).
+    local f=""
+    f=$(ls "$PROJECTS_DIR"/*/"$arg".jsonl 2>/dev/null | head -1 || true)
+    if [ -n "$f" ]; then
+      RESOLVED_LABEL="$(basename "$(dirname "$f")" | sed 's/^-Users-[^-]*-[^-]*-//; s/-/\//g')  $(last_prompt "$f")"
+    else
+      RESOLVED_LABEL="session ${arg:0:8}"
+    fi
   fi
 }
 

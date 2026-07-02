@@ -1,9 +1,9 @@
 ---
 description: Toggle desktop notifications on/off for THIS Claude Code session
 disable-model-invocation: true
-allowed-tools: Bash(claude-notify:*)
+allowed-tools: Bash(PATH=*), Bash(claude-notify:*)
 ---
 
 Toggling notifications for the current session:
 
-!`claude-notify toggle this`
+!`PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" claude-notify toggle this`
