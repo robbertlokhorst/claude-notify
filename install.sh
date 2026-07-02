@@ -33,6 +33,12 @@ BIN_DEST="$(brew --prefix)/bin/claude-notify"
 ln -sf "${REPO_DIR}/bin/claude-notify" "$BIN_DEST"
 echo "==> Linked 'claude-notify' CLI -> ${BIN_DEST}"
 
+# 2c. Install slash commands (/mute, /unmute, /mute-toggle) -----------------
+COMMANDS_DIR="${CLAUDE_DIR}/commands"
+mkdir -p "$COMMANDS_DIR"
+cp "${REPO_DIR}"/commands/*.md "$COMMANDS_DIR"/
+echo "==> Installed slash commands into ${COMMANDS_DIR} (/mute, /unmute, /mute-toggle)"
+
 # 3. Merge the hooks block into settings.json -------------------------------
 mkdir -p "$CLAUDE_DIR"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"

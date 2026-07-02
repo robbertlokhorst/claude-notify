@@ -73,17 +73,27 @@ claude-notify unmute all     # clear every mute
 claude-notify muted          # show only muted sessions
 ```
 
-**From inside a session**, mute the session you're in without looking up a
-number — just tell Claude to run it, or run it yourself in that session's shell:
+**From inside a session**, the easiest way is the bundled **slash commands** —
+type `/` and pick from the menu, nothing to remember:
+
+| Command | Effect |
+|---------|--------|
+| `/mute` | Mute notifications for the session you're in |
+| `/unmute` | Re-enable them |
+| `/mute-toggle` | Flip the current session's mute state |
+
+These run `claude-notify … this` at expansion time; they resolve the current
+session via the `CLAUDE_CODE_SESSION_ID` env var Claude Code sets in every
+session's shell. (Already-open sessions may need to reload command definitions —
+start a fresh session if a new command doesn't appear in the `/` menu.)
+
+You can also run the equivalent directly in any session's shell:
 
 ```bash
 claude-notify mute this      # mute the session this command runs in
 claude-notify unmute this    # unmute it
 claude-notify toggle         # flip this session's mute state (defaults to "this")
 ```
-
-`this` works via the `CLAUDE_CODE_SESSION_ID` env var that Claude Code sets in
-every session's shell.
 
 Muting takes effect immediately — the hook checks the mute list
 (`~/.claude/claude-notify-muted`, one session id per line) on every event and
